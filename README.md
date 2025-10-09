@@ -1,5 +1,7 @@
 # Smart Lens
 
+[![Android CI](https://github.com/YOUR_GITHUB_USER/YOUR_REPO/actions/workflows/android-ci.yml/badge.svg)](https://github.com/YOUR_GITHUB_USER/YOUR_REPO/actions/workflows/android-ci.yml) ![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin) ![AGP](https://img.shields.io/badge/AGP-8.10.0-3DDC84?logo=android) ![SDK](https://img.shields.io/badge/SDK-35-brightgreen)
+
 An Android app scaffold built with Kotlin and Jetpack Compose that integrates CameraX and ML Kit Text Recognition for on-device OCR. The project is configured with a Gradle Kotlin DSL build, a centralized version catalog, and a single :app module.
 
 Note: The repository currently contains the Android project configuration, resources, and dependencies wired for CameraX and ML Kit. Feature implementation (camera preview, OCR pipeline, UI screens) can be added on top of this scaffold.
@@ -7,6 +9,13 @@ Note: The repository currently contains the Android project configuration, resou
 
 ## Table of contents
 - Overview
+- AI overview
+- How AI is applied
+- OCR inference pipeline
+- Model and language support
+- Performance and latency
+- Privacy and data handling
+- Use cases and impact
 - Tech stack
 - Requirements
 - Quickstart
@@ -15,6 +24,9 @@ Note: The repository currently contains the Android project configuration, resou
 - Project structure
 - Configuration
 - Permissions
+- Screenshots
+- Runtime permission example (Compose)
+- Continuous Integration
 - Architecture at a glance
 - Roadmap / next steps
 - Troubleshooting
@@ -32,6 +44,90 @@ Note: The repository currently contains the Android project configuration, resou
 
 The app requests the camera permission and is set up to use a no-action-bar Material theme (`Theme.SmartLens`).
 
+## AI overview
+Smart Lens uses on-device AI (ML Kit Text Recognition) to convert pixels from the live camera feed into structured text in real time. Running inference entirely on-device means:
+- Low latency: immediate feedback suitable for live overlays and guidance
+- Private by default: frames never leave the device for OCR
+- Offline ready: recognition works without network connectivity
+
+## How AI is applied
+- Live OCR on camera frames: continuous recognition while the camera preview is active
+- Structured output: recognized text is returned as blocks/lines/elements for downstream UI or logic
+- Compose-friendly state: results can be exposed as immutable state to drive UI updates (e.g., overlays, copy/share)
+
+Common use cases this enables:
+- Reading signs, labels, and documents in-context
+- Digitizing receipts/notes for search and sharing
+- Accessibility enhancements (e.g., larger text, potential TTS in future)
+
+## OCR inference pipeline
+1) Capture frames with CameraX ImageAnalysis
+2) Convert to an ML Kit InputImage with the correct rotation
+3) Run Text Recognition on a background thread
+4) Emit results to the UI layer for rendering
+
+Example analyzer setup with ML Kit:
+
+```kotlin
+class OcrAnalyzer(
+    private val onResult: (com.google.mlkit.vision.text.Text) -> Unit
+) : ImageAnalysis.Analyzer {
+
+    private val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(
+        com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS
+    )
+
+    override fun analyze(imageProxy: ImageProxy) {
+        val mediaImage = imageProxy.image
+        if (mediaImage == null) {
+            imageProxy.close()
+            return
+        }
+        val rotation = imageProxy.imageInfo.rotationDegrees
+        val input = com.google.mlkit.vision.common.InputImage.fromMediaImage(mediaImage, rotation)
+
+        recognizer.process(input)
+            .addOnSuccessListener { text -> onResult(text) }
+            .addOnCompleteListener { imageProxy.close() }
+    }
+}
+```
+
+And a performance-friendly ImageAnalysis configuration:
+
+```kotlin
+val analysis = ImageAnalysis.Builder()
+    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+    .build()
+analysis.setAnalyzer(executor, OcrAnalyzer { text ->
+    // Update state with recognized text here
+})
+```
+
+## Model and language support
+This project uses ML Kit's on-device Latin text recognition model. It supports many Latin-based languages. For additional scripts (Chinese, Devanagari, Japanese, Korean), ML Kit provides separate artifacts/packages. If you need those, add the corresponding dependencies and switch the recognizer options accordingly.
+
+Accuracy tips:
+- Prefer good lighting and focus; avoid motion blur
+- Align/deskew documents when possible
+- Consider a region-of-interest crop if only part of the frame is relevant
+
+## Performance and latency
+- Use STRATEGY_KEEP_ONLY_LATEST to avoid analyzer backlog
+- Keep analysis resolution reasonable (balance detail vs. speed)
+- Run inference on a background executor; avoid heavy work on the UI thread
+- Reuse recognizer client; avoid recreating it per frame
+- Optionally subsample frames (e.g., process every Nth) if UI remains responsive
+
+## Privacy and data handling
+- OCR is performed fully on-device; no frames are uploaded by default
+- Camera permission is required and requested at runtime
+- If you later add cloud features (translation, sync), gate them behind explicit user actions and clear settings
+
+## Use cases and impact
+- Quick capture of text from the physical world for copying, sharing, or search
+- Assistive scenarios for users with low vision or when reading small text
+- Productivity boosts when digitizing notes, whiteboards, and receipts
 
 ## Tech stack
 - Android Gradle Plugin: 8.10.0
@@ -46,7 +142,7 @@ Dependency versions are managed via Gradle Version Catalog at `gradle/libs.versi
 
 
 ## Requirements
-- JDK 11
+- JDK 17 (required by Android Gradle Plugin 8.x)
 - Android SDK + Build-Tools for SDK 35 installed
 - A device or emulator running Android 7.0+ for install/instrumentation tests
 - Android Studio (latest) or CLI tools
@@ -147,6 +243,50 @@ The app requests camera access:
 Runtime permission requesting should be implemented in UI/Activity code before starting the CameraX preview.
 
 
+## Screenshots
+Place screenshots in `docs/screenshots/` and reference them below. Example (replace with your own image):
+
+![Main screen placeholder](docs/screenshots/main.png)
+
+
+## Runtime permission example (Compose)
+Request the Camera permission at runtime from a Composable and proceed only when granted:
+
+```kotlin
+@Composable
+fun CameraPermissionGate(onGranted: () -> Unit, onDenied: () -> Unit = {}) {
+    val context = LocalContext.current
+    val permission = android.Manifest.permission.CAMERA
+    var granted by remember { mutableStateOf(
+        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+    ) }
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        granted = isGranted
+        if (isGranted) onGranted() else onDenied()
+    }
+
+    LaunchedEffect(Unit) {
+        if (!granted) launcher.launch(permission) else onGranted()
+    }
+
+    if (!granted) {
+        Text("Camera permission required to continue")
+    }
+}
+```
+
+Tip: Wrap your CameraX preview setup inside `onGranted { ... }` to start the camera only after permission is granted.
+
+
+## Continuous Integration
+A basic GitHub Actions workflow is included at `.github/workflows/android-ci.yml` that builds, runs unit tests, and lints on pushes and pull requests.
+
+To enable the badge at the top of this README, replace `YOUR_GITHUB_USER/YOUR_REPO` with your actual GitHub org/user and repo name.
+
+
 ## Architecture at a glance
 This repository is a single-module Compose app scaffold intended to:
 - Show a camera preview using CameraX (camera-camera2, lifecycle, view)
@@ -174,6 +314,7 @@ Recommended layering when implementing features:
 - Build-tools mismatch: Install the required platform/build-tools for API 35 via SDK Manager
 - Emulator camera: If preview is blank, verify emulator has a virtual camera or test on a physical device
 - Gradle memory: adjust `org.gradle.jvmargs` in `gradle.properties` if you hit OOM during builds
+- Java version: ensure you’re using JDK 17 when building locally and in CI
 
 
 ## License
