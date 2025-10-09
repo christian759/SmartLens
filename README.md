@@ -1,6 +1,6 @@
 # Smart Lens
 
-[![Android CI](https://github.com/YOUR_GITHUB_USER/YOUR_REPO/actions/workflows/android-ci.yml/badge.svg)](https://github.com/YOUR_GITHUB_USER/YOUR_REPO/actions/workflows/android-ci.yml) ![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin) ![AGP](https://img.shields.io/badge/AGP-8.10.0-3DDC84?logo=android) ![SDK](https://img.shields.io/badge/SDK-35-brightgreen)
+[![Android CI](https://github.com/YOUR_GITHUB_USER/YOUR_REPO/actions/workflows/android-ci.yml/badge.svg)](https://github.com/christian759/SmartLens/tree/master/.github/workflows/android-ci.yml) ![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin) ![AGP](https://img.shields.io/badge/AGP-8.10.0-3DDC84?logo=android) ![SDK](https://img.shields.io/badge/SDK-35-brightgreen)
 
 An Android app scaffold built with Kotlin and Jetpack Compose that integrates CameraX and ML Kit Text Recognition for on-device OCR. The project is configured with a Gradle Kotlin DSL build, a centralized version catalog, and a single :app module.
 
