@@ -243,12 +243,6 @@ The app requests camera access:
 Runtime permission requesting should be implemented in UI/Activity code before starting the CameraX preview.
 
 
-## Screenshots
-Place screenshots in `docs/screenshots/` and reference them below. Example (replace with your own image):
-
-![Main screen placeholder](docs/screenshots/main.png)
-
-
 ## Runtime permission example (Compose)
 Request the Camera permission at runtime from a Composable and proceed only when granted:
 
